@@ -1,4 +1,4 @@
-ESX = nil
+QBCore = exports["qb-core"]:GetCoreObject()
 local myjob
 local blips = {}
 local nomidaberto
@@ -11,16 +11,27 @@ local focuson = false
 local TunagensDefault = {}
 local preco = 0
 local multiplier = 1
+local myjob = nil
+
+RegisterNetEvent(Config.qbcore..':Client:OnPlayerLoaded', function()
+	QBCore.Functions.GetPlayerData(function(PlayerData)
+		myjob = PlayerData.job
+	end)
+end)
+
 Citizen.CreateThread(function()
-	while ESX == nil do
-		TriggerEvent('esx:getSharedObject', function(obj) ESX = obj end)
+
+	while QBCore == nil do Citizen.Wait(100) end
+	while QBCore.Functions.GetPlayerData() == nil do Citizen.Wait(100) end
+	while QBCore.Functions.GetPlayerData().job == nil do Citizen.Wait(100) end
+
+	QBCore.Functions.GetPlayerData(function(PlayerData)
+		myjob = PlayerData.job
+	end)
+
+	while myjob == nil do
 		Citizen.Wait(10)
 	end
-	Wait(500)
-	while ESX.GetPlayerData().job == nil do
-        Citizen.Wait(10)
-    end
-	myjob = ESX.GetPlayerData().job
 	Wait(1000)
 	for i = 1, #Config.TunningLocations do
 		local v = Config.TunningLocations[i]
@@ -39,13 +50,8 @@ Citizen.CreateThread(function()
 	end
 end)
 
-RegisterNetEvent('TunningSystem3hu:Used')
-AddEventHandler('TunningSystem3hu:Used', function(id,bool)
-	Config.TunningLocations[id].used = bool
-end)
-
-RegisterNetEvent('esx:setJob')
-AddEventHandler('esx:setJob', function(job)
+RegisterNetEvent('QBCore:Client:OnJobUpdate')
+AddEventHandler('QBCore:Client:OnJobUpdate', function(job)
 	myjob = job
 	for i = 1, #Config.TunningLocations do
 		local v = Config.TunningLocations[i]
@@ -69,7 +75,7 @@ AddEventHandler('esx:setJob', function(job)
 end)
 
 function GetClosestVehicle(coords)
-	local vehicles        = ESX.Game.GetVehicles()
+	local vehicles        = QBCore.Functions.GetVehicles()
 	local closestDistance = -1
 	local closestVehicle  = -1
 	local coords          = coords
@@ -101,7 +107,7 @@ Citizen.CreateThread(function()
 		if nomidaberto == nil then
 			for i = 1, #Config.TunningLocations do
 				local v = Config.TunningLocations[i]
-				if (myjob.name == v.job or v.job == nil) and not v.used then
+				if (myjob.name == v.job or v.job == nil) and myjob.grade.level >= 1 and not v.used then
 					local distance = #(coords - v.coords)
 					if distance <= Config.Range+2 then
 						dormir = 500
@@ -111,73 +117,63 @@ Citizen.CreateThread(function()
 							if IsControlJustReleased(0, 38) and IsPedInAnyVehicle(PlayerPedId(), false) then
 								local veh, distance = GetClosestVehicle(v.coords)
 								if DoesEntityExist(veh) and distance <= Config.Range then
-									ESX.TriggerServerCallback("TunningSystem3hu:Used", function(cb)
-										if cb then
-											while not Config.TunningLocations[i].used do
-												Wait(10)
-											end
-											TunagensDefault = {}
-											preco = 0
-											while not NetworkHasControlOfEntity(veh) do
-												Citizen.Wait(10)
-											
-												NetworkRequestControlOfEntity(veh)
-											end
-											Wait(10)
-											carroselected = veh
-											SetVehicleEngineOn(carroselected,true,true,false)
-											FreezeEntityPosition(carroselected,true)
-											nomidaberto = i
-											multiplier = (v.howmuchtopay)/100
-											local listado = false
-											if Config.AllowVehicleExceptions then
-												local vehname = GetName(carroselected)
-												local mplus = Config.VehicleExceptions[vehname]
-												if mplus then
-													listado = true
-													multiplier=multiplier+mplus
-												end
-											end
-											if Config.PricesByClass and not listado then
-												local vehclass = GetVehicleClass(carroselected)
-												local mplus = Config.ClassPrices[vehclass]
-												if mplus then
-													multiplier=multiplier+mplus
-												end
-											end
-											multiplier=math.floor(multiplier)
-											SetVehicleModKit(veh,0)
-											local tabelainfo = ModsAvailable(veh)
-											SetNuiFocus(true, true)
-											focuson = true
-											gameplaycam = GetRenderingCam()
-											cam = CreateCam("DEFAULT_SCRIPTED_CAMERA",true,2)
-											SendNUIMessage({
-												action = "updateTotal",
-												text = "Total: "..preco..Config.Currency,
-											})
-											SendNUIMessage({
-												action = "openMenu",
-												menuTable = tabelainfo,
-											})
-											SendNUIMessage({
-												action = "showFreeUpButton",
-											})
-											Citizen.CreateThread(function()
-												while nomidaberto do
-													Wait(2000)
-													local popocords = GetEntityCoords(veh)
-													local coords = GetEntityCoords(PlayerPedId())
-													if not DoesEntityExist(veh) or #(popocords - v.coords) >= 10.0 or #(coords - v.coords) >= 10.0 then
-														ModelCancel(veh)
-														break
-													end
-												end
-											end)
-										else
-										
+									TunagensDefault = {}
+									preco = 0
+									while not NetworkHasControlOfEntity(veh) do
+										Citizen.Wait(10)
+									
+										NetworkRequestControlOfEntity(veh)
+									end
+									carroselected = veh
+									FreezeEntityPosition(carroselected,true)
+									Wait(10)
+									SetVehicleEngineOn(carroselected,true,true,false)
+									nomidaberto = i
+									multiplier = (v.howmuchtopay)/100
+									local listado = false
+									if Config.AllowVehicleExceptions then
+										local vehname = GetName(carroselected)
+										local mplus = Config.VehicleExceptions[vehname:lower()]
+										if mplus then
+											listado = true
+											multiplier=mplus
 										end
-									end,i,NetworkGetNetworkIdFromEntity(veh))
+									end
+									if Config.PricesByClass and not listado then
+										local vehclass = GetVehicleClass(carroselected)
+										local mplus = Config.ClassPrices[vehclass]
+										if mplus then
+											multiplier=mplus
+										end
+									end
+									SetVehicleModKit(veh,0)
+									local tabelainfo = ModsAvailable(veh)
+									SetNuiFocus(true, true)
+									focuson = true
+									gameplaycam = GetRenderingCam()
+									cam = CreateCam("DEFAULT_SCRIPTED_CAMERA",true,2)
+									SendNUIMessage({
+										action = "updateTotal",
+										text = "Total: "..preco..Config.Currency,
+									})
+									SendNUIMessage({
+										action = "openMenu",
+										menuTable = tabelainfo,
+									})
+									SendNUIMessage({
+										action = "showFreeUpButton",
+									})
+									Citizen.CreateThread(function()
+										while nomidaberto do
+											Wait(2000)
+											local popocords = GetEntityCoords(veh)
+											local coords = GetEntityCoords(PlayerPedId())
+											if not DoesEntityExist(veh) or #(popocords - v.coords) >= 10.0 or #(coords - v.coords) >= 10.0 then
+												ModelCancel(veh)
+												break
+											end
+										end
+									end)
 								end
 							end
 						end
@@ -186,6 +182,132 @@ Citizen.CreateThread(function()
 			end
 		end
 		Wait(dormir)
+	end
+end)
+
+RegisterNetEvent('TunningSystem:openMechanic', function()
+	print('abc')
+	local v = Config.TunningLocations[1]
+	local veh, distance = GetClosestVehicle(GetEntityCoords(PlayerPedId()))
+	print(veh, distance)
+	if DoesEntityExist(veh) and distance <= Config.Range then
+		print('pim pam')
+		TunagensDefault = {}
+		preco = 0
+		print('dd')
+		while not NetworkHasControlOfEntity(veh) do
+			Citizen.Wait(10)
+		
+			NetworkRequestControlOfEntity(veh)
+		end
+		carroselected = veh
+		FreezeEntityPosition(carroselected,true)
+		Wait(10)
+		SetVehicleEngineOn(carroselected,true,true,false)
+		nomidaberto = i
+		multiplier = (v.howmuchtopay)/100
+		print('ccc')
+		local listado = false
+		if Config.AllowVehicleExceptions then
+			local vehname = GetName(carroselected)
+			local mplus = Config.VehicleExceptions[vehname:lower()]
+			if mplus then
+				listado = true
+				multiplier=mplus
+			end
+		end
+		if Config.PricesByClass and not listado then
+			local vehclass = GetVehicleClass(carroselected)
+			local mplus = Config.ClassPrices[vehclass]
+			if mplus then
+				multiplier=mplus
+			end
+		end
+		SetVehicleModKit(veh,0)
+		local tabelainfo = ModsAvailable(veh)
+		SetNuiFocus(true, true)
+		focuson = true
+		gameplaycam = GetRenderingCam()
+		cam = CreateCam("DEFAULT_SCRIPTED_CAMERA",true,2)
+		SendNUIMessage({
+			action = "updateTotal",
+			text = "Total: "..preco..Config.Currency,
+		})
+		SendNUIMessage({
+			action = "openMenu",
+			menuTable = tabelainfo,
+		})
+		SendNUIMessage({
+			action = "showFreeUpButton",
+		})
+		print('bvbc')
+	end
+end)
+
+RegisterNetEvent('tuning:open', function()
+	local i = 1
+	local v = Config.TunningLocations[i]
+	local coords = GetEntityCoords(PlayerPedId())
+	local veh, distance = GetClosestVehicle(coords)
+	if DoesEntityExist(veh) and distance <= Config.Range then
+		TunagensDefault = {}
+		preco = 0
+		while not NetworkHasControlOfEntity(veh) do
+			Citizen.Wait(10)
+		
+			NetworkRequestControlOfEntity(veh)
+		end
+		carroselected = veh
+		FreezeEntityPosition(carroselected,true)
+		Wait(10)
+		SetVehicleEngineOn(carroselected,true,true,false)
+		print('ttc')
+		nomidaberto = i
+		multiplier = (v.howmuchtopay)/100
+		local listado = false
+		if Config.AllowVehicleExceptions then
+			local vehname = GetName(carroselected)
+			local mplus = Config.VehicleExceptions[vehname:lower()]
+			if mplus then
+				listado = true
+				multiplier=mplus
+			end
+		end
+		if Config.PricesByClass and not listado then
+			local vehclass = GetVehicleClass(carroselected)
+			local mplus = Config.ClassPrices[vehclass]
+			if mplus then
+				multiplier=mplus
+			end
+		end
+		SetVehicleModKit(veh,0)
+		local tabelainfo = ModsAvailable(veh)
+		SetNuiFocus(true, true)
+		focuson = true
+		gameplaycam = GetRenderingCam()
+		cam = CreateCam("DEFAULT_SCRIPTED_CAMERA",true,2)
+		SendNUIMessage({
+			action = "updateTotal",
+			text = "Total: "..preco..Config.Currency,
+		})
+		SendNUIMessage({
+			action = "openMenu",
+			menuTable = tabelainfo,
+		})
+		SendNUIMessage({
+			action = "showFreeUpButton",
+		})
+		Citizen.CreateThread(function()
+			while nomidaberto do
+				Wait(2000)
+				local popocords = GetEntityCoords(veh)
+				local coords = GetEntityCoords(PlayerPedId())
+				if not DoesEntityExist(veh) then
+					ModelCancel(veh)
+					break
+				end
+			end
+		end)
 	end
 end)
 
@@ -205,7 +327,6 @@ function ModelCancel(veh)
 	focuson = false
 	camControl("close")
 	--ResetCam()
-	TriggerServerEvent("TunningSystem3hu:Used", nomidaberto)
 	nomidaberto = nil
 	menuatual = nil
 	carroselected = nil
@@ -297,23 +418,36 @@ function ModsAvailable(carro)
 	rodaatual2 = GetVehicleMod(carro,24)
 	SetVehicleMod(carro,24, rodaatual2,GetVehicleModVariation(carro,24))
 	mods[#mods+1],corprinc,corsec,pearltab,whlclrtab,dshclrtab,intclrtab = GetColors()
+	if GetGameBuildNumber() >= 2612 then
+		mods[#mods+1],chm1,chm2 = GetChameleon()
+	end
 	TunagensDefault["corprinc"] = corprinc
 	TunagensDefault["corsec"] = corsec
 	TunagensDefault["pearltab"] = pearltab
 	TunagensDefault["whlclrtab"] = whlclrtab
 	TunagensDefault["dshclrtab"] = dshclrtab
 	TunagensDefault["intclrtab"] = intclrtab
+	TunagensDefault["chm1"] = chm1
+	TunagensDefault["chm2"] = chm2
 	mods[#mods+1],neonstable = GetNeons()
 	TunagensDefault["neons"] = neonstable
 	mods[#mods+1],smoketable = GetSmoke()
 	TunagensDefault["smoke"] = smoketable
 	local windssting = GetVehicleWindowTint(carro)
+	if windssting < 0 then
+		SetVehicleWindowTint(carro,0)
+		windssting = GetVehicleWindowTint(carro)
+	end
 	mods[#mods+1] = AddToMenu("windtint",AddToSubMenu("windtint",6,false,windssting+1),windssting+1)
-	TunagensDefault["windtint"] = windssting+1
+	TunagensDefault["windtint"] = windssting
 	mods[#mods+1] = AddToMenu("plate",AddToSubMenu("plate",6,false,GetVehicleNumberPlateTextIndex(carro)+1),GetVehicleNumberPlateTextIndex(carro)+1)
 	TunagensDefault["plate"] = GetVehicleNumberPlateTextIndex(carro)+1
 	mods[#mods+1] = TurboMenu()
-	TunagensDefault["turbo"] = IsToggleModOn(carro,18)
+	local turbom = false
+	if IsToggleModOn(carro,18) then
+		turbom = true
+	end
+	TunagensDefault["turbo"] = turbom
 	mods[#mods+1],headlighttable = HeadLight()
 	TunagensDefault["headlight"] = headlighttable
 	mods[#mods+1],tyrestable = GetTyres("Tyres Front")
@@ -428,7 +562,7 @@ function AplicarMod(mod,index)
 		if IsToggleModOn(carroselected,18) then
 			costum = false
 		end
-		AddMoneyNotDefault(TunagensDefault["turbo"],Config.TunningPrices["turbo"],costum,IsToggleModOn(carroselected,18))
+		AddMoneyNotDefault(TunagensDefault["turbo"],Config.TunningPrices["turbo"],costum,not costum)
 		ToggleVehicleMod(carroselected,18,costum)
 	elseif mod == "xenon" then
 		local costum = true
@@ -441,7 +575,7 @@ function AplicarMod(mod,index)
 		ToggleVehicleMod(carroselected,22,costum)
 	elseif mod == "windtint" then
 		local antigo = GetVehicleWindowTint(carroselected)
-		AddMoneyNotDefault(TunagensDefault[mod]-2,Config.TunningPrices[mod],index,antigo-1)
+		AddMoneyNotDefault(TunagensDefault[mod],Config.TunningPrices[mod],index+1,antigo)
 		SetVehicleWindowTint(carroselected,index+1)
 	elseif mod == "plate" then
 		local antigo = GetVehicleNumberPlateTextIndex(carroselected)
@@ -457,6 +591,11 @@ function AplicarMod(mod,index)
 			aplicar = 1
 			wht = nil
 			wht2 = true
+		end
+		if aplicar == 1 then
+			SetVehicleAutoRepairDisabled(carroselected,true)
+		else
+			SetVehicleAutoRepairDisabled(carroselected,false)
 		end
 		SetVehicleExtra(carroselected,index,aplicar)
 		if jatava ~= IsVehicleExtraTurnedOn(carroselected, index) then
@@ -482,6 +621,7 @@ function AddMoneyDefault(mod,index,antigo)
 			preco = preco+(Config.TunningPrices[mod].base+(index+1)*Config.TunningPrices[mod].bylevel)*multiplier
 		end
 	end
+	preco = math.floor(preco)
 	SendNUIMessage({
 		action = "updateTotal",
 		text = "Total: "..preco..Config.Currency,
@@ -516,6 +656,7 @@ function AddMoneyNotDefault(default,price,index,antigo,teste,teste2)
 			preco = preco+(price.base+(somar2)*price.bylevel)*multiplier
 		end
 	end
+	preco = math.floor(preco)
 	SendNUIMessage({
 		action = "updateTotal",
 		text = "Total: "..preco..Config.Currency,
@@ -554,7 +695,7 @@ function AddMoneyCorRGB(cor,tipo)
 			preco = preco+(Config.TunningPrices[tipo].base)*multiplier
 		end
 	end
-
+	preco = math.floor(preco)
 	SendNUIMessage({
 		action = "updateTotal",
 		text = "Total: "..preco..Config.Currency,
@@ -593,6 +734,7 @@ function AddMoneyTyres(mota,roda,tipo,antigonum)
 			preco = preco+(price.base+(roda)*price.bylevel)*multiplier
 		end
 	end
+	preco = math.floor(preco)
 	SendNUIMessage({
 		action = "updateTotal",
 		text = "Total: "..preco..Config.Currency,
@@ -664,6 +806,7 @@ RegisterNUICallback("action", function(data)
 							wht = nil
 							wht2 = true
 						end
+						SetVehicleAutoRepairDisabled(carroselected,true)
 						SetVehicleExtra(carroselected,id,1)
 						if jatava ~= IsVehicleExtraTurnedOn(carroselected, id) then
 							AddMoneyNotDefault(cenas[id],Config.TunningPrices["extra"],wht,wht2)
@@ -684,6 +827,11 @@ RegisterNUICallback("action", function(data)
 						aplicar = 1
 						wht = nil
 						wht2 = true
+					end
+					if aplicar == 1 then
+						SetVehicleAutoRepairDisabled(carroselected,true)
+					else
+						SetVehicleAutoRepairDisabled(carroselected,false)
 					end
 					SetVehicleExtra(carroselected,i,aplicar)
 					if jatava ~= IsVehicleExtraTurnedOn(carroselected, i) then
@@ -706,12 +854,18 @@ RegisterNUICallback("action", function(data)
 			local def = TunagensDefault["corprinc"].tipao
 			local price = Config.TunningPrices["PrimaryColorType"]
 			local ptp, colorp,nnn = GetVehicleModColor_1(carroselected)
+			if ptp >= 6 then
+				ptp = 0
+			end
 			local rr,gg,bb = GetVehicleCustomPrimaryColour(carroselected)
 			AddMoneyNotDefault(def,price,tab.index,ptp)
 			SetVehicleModColor_1(carroselected,tab.index,0,0)
 			SetVehicleCustomPrimaryColour(carroselected,rr,gg,bb)
 		elseif tab.tipo == "cortipos" then
 			local pts, colors = GetVehicleModColor_2(carroselected)
+			if pts >= 6 then
+				pts = 0
+			end
 			local def = TunagensDefault["corsec"].tipao
 			local price = Config.TunningPrices["SecondaryColorType"]
 			local rr,gg,bb = GetVehicleCustomSecondaryColour(carroselected)
@@ -720,20 +874,26 @@ RegisterNUICallback("action", function(data)
 			SetVehicleCustomSecondaryColour(carroselected,rr,gg,bb)
 		elseif tab.tipo == "defaultprgb" then
 			AddMoneyCorRGB(tab.index,"PrimaryRGBColor")
-			SetVehicleCustomPrimaryColour(carroselected,tab.index.r,tab.index.g,tab.index.b)
 			local def = TunagensDefault["corprinc"].tipao
 			local price = Config.TunningPrices["PrimaryColorType"]
 			local ptp, colorp,nnn = GetVehicleModColor_1(carroselected)
+			if ptp >= 6 then
+				ptp = 0
+			end
 			AddMoneyNotDefault(def,price,tab.index.tipao,ptp)
-			SetVehicleModColor_1(carroselected,tab.index.tipao,tab.index.crl,0)
+			SetVehicleModColor_1(carroselected,tab.index.tipao,0,0)
+			SetVehicleCustomPrimaryColour(carroselected,tab.index.r,tab.index.g,tab.index.b)
 		elseif tab.tipo == "defaultsrgb" then
 			AddMoneyCorRGB(tab.index,"SecondaryRGBColor")
-			SetVehicleCustomSecondaryColour(carroselected,tab.index.r,tab.index.g,tab.index.b)
 			local def = TunagensDefault["corsec"].tipao
 			local price = Config.TunningPrices["SecondaryColorType"]
 			local pts, colors,nnn = GetVehicleModColor_2(carroselected)
+			if pts >= 6 then
+				pts = 0
+			end
 			AddMoneyNotDefault(def,price,tab.index.tipao,pts)
-			SetVehicleModColor_2(carroselected,tab.index.tipao,tab.index.crl,0)
+			SetVehicleModColor_2(carroselected,tab.index.tipao,0,0)
+			SetVehicleCustomSecondaryColour(carroselected,tab.index.r,tab.index.g,tab.index.b)
 		elseif (tab.tipo == "sport" or tab.tipo == "muscle" or tab.tipo == "lowrider" or tab.tipo == "suv" or tab.tipo == "offroad" or tab.tipo == "tuner" or tab.tipo == "motorcycle" or tab.tipo == "highend" or tab.tipo == "bennys" or tab.tipo == "bespoke" or tab.tipo == "f1" or tab.tipo == "rua" or tab.tipo == "track") then
 			AddMoneyTyres(tab.moto,tab.index,tab.tipo,GetVehicleMod(carroselected,tab.moto))
 			SetVehicleWheelType(carroselected,Config.Wheels[tab.tipo])
@@ -775,6 +935,16 @@ RegisterNUICallback("action", function(data)
 			local antigito = GetVehicleInteriorColour(carroselected)
 			AddMoneyDefault("intclrtab",tab.index,antigito)
 			SetVehicleInteriorColour(carroselected, tab.index)
+		elseif menuatual == "cham-colourp" then
+			local prim,sec = GetVehicleColours(carroselected)
+			AddMoneyDefault("chm1",tab.index,prim)
+			SetVehicleModKit(carroselected, 0)
+   			SetVehicleColours(carroselected, tab.index, sec)
+		elseif menuatual == "cham-colours" then
+			local prim,sec = GetVehicleColours(carroselected)
+			AddMoneyDefault("chm2",tab.index,sec)
+			SetVehicleModKit(carroselected, 0)
+   			SetVehicleColours(carroselected, prim, tab.index)
 		end
 		PlaySoundFrontend(-1, "OK", "HUD_FRONTEND_DEFAULT_SOUNDSET", 1)
 	elseif data.action == "backToMainMenu" then -- quando clicar no butao para voltar
@@ -783,6 +953,7 @@ RegisterNUICallback("action", function(data)
 		menuatual = nil
     elseif data.action == "changeColor" then
 		local cor = data.rgb
+		local coordsfix = GetEntityCoords(carroselected)
 		if menuatual == "corrgbp" then
 			AddMoneyCorRGB(cor,"PrimaryRGBColor")
 			SetVehicleCustomPrimaryColour(carroselected,cor.r,cor.g,cor.b)
@@ -801,6 +972,9 @@ RegisterNUICallback("action", function(data)
 			AddMoneyCorRGB(aply,"SmokeRGBColor")
 			SetVehicleTyreSmokeColor(carroselected,aply.r,aply.g,aply.b)
 		end
+		if #(GetEntityCoords(carroselected)-coordsfix) > 0.05 then
+			SetEntityCoordsNoOffset(carroselected,coordsfix)
+		end
 	elseif data.action == "cancel" then-- quando acabar
 		CancelEverything(data)
 		TunagensDefault = {}
@@ -811,20 +985,20 @@ RegisterNUICallback("action", function(data)
 		PlaySoundFrontend(-1, "NO", "HUD_FRONTEND_DEFAULT_SOUNDSET", 1)
 		camControl("close")
 		--ResetCam()
-		TriggerServerEvent("TunningSystem3hu:Used", nomidaberto)
 		nomidaberto = nil
 		multiplier = 1
 		menuatual = nil
 		carroselected = nil
     elseif data.action == "finish" then-- quando acabar
 		if preco > 0 then
-			TriggerServerEvent("TunningSystem3hu:PayModifications",preco,nomidaberto,ESX.Game.GetVehicleProperties(carroselected))
+			TriggerServerEvent("TunningSystem:PayModifications",preco,nomidaberto,QBCore.Functions.GetVehicleProperties(carroselected))
 		else
-			TriggerServerEvent("TunningSystem3hu:Used", nomidaberto)
+			TriggerServerEvent("TunningSystem:Used", nomidaberto)
 		end
 		while not chegoupago and preco > 0 do
 			Wait(10)
 		end
+		print(not chegoupago , preco)
 		preco = 0
 		chegoupago = false
 		TunagensDefault = {}
@@ -873,11 +1047,11 @@ function CancelEverything(data)
 		if modindex then
 			SetVehicleMod(carroselected,modindex,v,false)
 		elseif k=="corprinc" then
+			SetVehicleModColor_1(carroselected,cenas.tipao,0,0)
 			SetVehicleCustomPrimaryColour(carroselected,cenas.r,cenas.g,cenas.b)
-			SetVehicleModColor_1(carroselected,cenas.tipao,cenas.crl,0)
 		elseif k=="corsec" then
+			SetVehicleModColor_2(carroselected,cenas.tipao,0,0)
 			SetVehicleCustomSecondaryColour(carroselected,cenas.r,cenas.g,cenas.b)
-			SetVehicleModColor_2(carroselected,cenas.tipao,cenas.crl,0)
 		elseif k=="pearltab" then
 			local plrcolour, whcolour = GetVehicleExtraColours(carroselected)
 			SetVehicleExtraColours(carroselected, cenas, whcolour)
@@ -888,6 +1062,12 @@ function CancelEverything(data)
 			SetVehicleDashboardColour(carroselected, cenas)
 		elseif k=="intclrtab" then
 			SetVehicleInteriorColour(carroselected, cenas)
+		elseif k=="chm1" then
+			local primc, secc = GetVehicleColours(carroselected)
+			SetVehicleColours(carroselected, cenas, secc)
+		elseif k=="chm2" then
+			local primc, secc = GetVehicleColours(carroselected)
+			SetVehicleColours(carroselected, primc, cenas)
 		elseif k=="neons" then
 			for i = 0, 3 do
 				SetVehicleNeonLightEnabled(carroselected,i,cenas.ligado)
@@ -900,7 +1080,7 @@ function CancelEverything(data)
 				SetVehicleTyreSmokeColor(carroselected,0,0,1)
 			end
 		elseif k=="windtint" then
-			SetVehicleWindowTint(carroselected,cenas-1)
+			SetVehicleWindowTint(carroselected,cenas)
 		elseif k == "plate" then
 			SetVehicleNumberPlateTextIndex(carroselected, cenas-1)
 		elseif k == "turbo" then
@@ -927,6 +1107,7 @@ function CancelEverything(data)
 			for id = 0, 20, 1 do
 				if DoesExtraExist(carroselected, id) then
 					if IsVehicleExtraTurnedOn(carroselected, id) then
+						SetVehicleAutoRepairDisabled(carroselected,true)
 						SetVehicleExtra(carroselected,id,1)
 					end
 				end
@@ -937,6 +1118,11 @@ function CancelEverything(data)
 					if cenas[i] then
 						aplicar=0
 					end
+					if aplicar == 1 then
+						SetVehicleAutoRepairDisabled(carroselected,true)
+					else
+						SetVehicleAutoRepairDisabled(carroselected,false)
+					end
 					SetVehicleExtra(carroselected,i,aplicar)
 				end
 			end
@@ -946,13 +1132,12 @@ function CancelEverything(data)
 	end
 end
 
-RegisterNetEvent('TunningSystem3hu:PayAfter')
-AddEventHandler('TunningSystem3hu:PayAfter', function(pago)
+RegisterNetEvent('TunningSystem:PayAfter')
+AddEventHandler('TunningSystem:PayAfter', function(pago)
 	if not pago then
 		CancelEverything()
 	end
 	chegoupago = true
-	TriggerServerEvent("TunningSystem3hu:Used", nomidaberto)
 	nomidaberto = nil
 	SetNuiFocus(false, false)
 end)
@@ -1009,7 +1194,7 @@ function camControl(c)
 	Wait(50)
 	if c == "Front Bumper" or c == "Grill" or c == "Vanity Plate" or c == "Aerial" then
 		MoveVehCam('front',-0.6,1.5,0.4)
-	elseif c == "color" or c == "Livery" or c == "Livery2" then
+	elseif c == "color" or c == "Livery" or c == "Livery2" or c == "chameleon" then
 		MoveVehCam('middle',-2.6,2.5,1.4)
 	elseif  c == "Rear Bumper" or c == "Exhaust" or c == "Fuel Tank" then
 		MoveVehCam('back',-0.5,-1.5,0.2)
