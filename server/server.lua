@@ -1,173 +1,174 @@
-ESX = nil
-TriggerEvent('esx:getSharedObject', function(obj) ESX = obj; end)
+QBCore = exports['qb-core']:GetCoreObject()
 
 if Config.WebHook and Config.WebHook ~= "" then
-	function sendToDiscord(name,message,color)
-		local DiscordWebHook = Config.WebHook
+    function sendToDiscord(name, message, color)
+        local DiscordWebHook = Config.WebHook
 
-		local embeds = {
-			{
-			  ["title"] = message,
-			  ["type"] = "rich",
-			  ["color"] = color,
-			}
-		}
+        local embeds = {
+            {
+                ["title"] = message,
+                ["type"] = "rich",
+                ["color"] = color,
+            }
+        }
 
-	if message == nil or message == '' then return false end
-	PerformHttpRequest(DiscordWebHook, function(err, text, headers)end, 'POST', json.encode({ username = name,embeds = embeds}), {['Content-Type'] = 'application/json'})
-	end
+        if message == nil or message == '' then return false end
+        PerformHttpRequest(DiscordWebHook, function(err, text, headers) end, 'POST', json.encode({ username = name, embeds = embeds }), { ['Content-Type'] = 'application/json' })
+    end
 end
-
-ESX.RegisterServerCallback('TunningSystem3hu:Used', function(source,cb,id,netid)
-	local enviar = false
-	if not Config.TunningLocations[id].used then
-		enviar = true
-		if SendUsed then
-			SendUsed(id,source)
-		else
-			print("TunningSystem3hu: READ README, YOUR TRANSID IS INVALID, SCRIPT WON'T WORK")
-		end
-	end
-    cb(enviar)
-	while Config.TunningLocations[id].used do
-		Wait(10000)
-		if GetPlayerPing(source) <= 0 then
-			DeleteEntity(NetworkGetEntityFromNetworkId(netid))
-			if SendUsed then
-				SendUsed(id,false)
-			else
-				print("TunningSystem3hu: READ README, YOUR TRANSID IS INVALID, SCRIPT WON'T WORK")
-			end
-		end
-	end
-end)
 
 RegisterServerEvent('TunningSystem3hu:Used')
 AddEventHandler('TunningSystem3hu:Used', function(id)
-	local _source = source
-	if Config.TunningLocations[id].used == _source then
-		if SendUsed then
-			SendUsed(id,false)
-		else
-			print("TunningSystem3hu: READ README, YOUR TRANSID IS INVALID, SCRIPT WON'T WORK")
-		end
-	else
-		--cheateeer
-	end
+    local _source = source
+    if Config.TunningLocations[id].used == _source then
+        if SendUsed then
+            SendUsed(id, false)
+        else
+            print("TunningSystem3hu: READ README, YOUR TRANSID IS INVALID, SCRIPT WON'T WORK")
+        end
+    else
+        -- cheateeer
+    end
+end)
+
+QBCore.Functions.CreateCallback('TunningSystem3hu:Used', function(source, cb, id, netid)
+    local enviar = false
+    if not Config.TunningLocations[id].used then
+        enviar = true
+        if SendUsed then
+            SendUsed(id, source)
+        else
+            print("TunningSystem3hu: READ README, YOUR TRANSID IS INVALID, SCRIPT WON'T WORK")
+        end
+    end
+    cb(enviar)
+    while Config.TunningLocations[id].used do
+        Wait(10000)
+        if GetPlayerPing(source) <= 0 then
+            DeleteEntity(NetworkGetEntityFromNetworkId(netid))
+            if SendUsed then
+                SendUsed(id, false)
+            else
+                print("TunningSystem3hu: READ README, YOUR TRANSID IS INVALID, SCRIPT WON'T WORK")
+            end
+        end
+    end
 end)
 
 RegisterServerEvent('TunningSystem3hu:PayModifications')
-AddEventHandler('TunningSystem3hu:PayModifications', function(preco,id,vehprops)
+AddEventHandler('TunningSystem3hu:PayModifications', function(preco, id, vehprops)
     local config = Config.TunningLocations[id]
     local _source = source
     local pago = false
-    local xPlayer = ESX.GetPlayerFromId(_source)
+    local Player = QBCore.Functions.GetPlayer(_source)
     local whyisitasync = false
     if config.used == _source then
         local permitido = true
         if config.job then
             permitido = false
-            if xPlayer.getJob().name == config.job then
+            if Player.PlayerData.job.name == config.job then
                 permitido = true
             end
         end
         if permitido then
             if config.society and config.job then
-                TriggerEvent('esx_addonaccount:getSharedAccount', 'society_'..config.job, function(account)
-                    if account.money >= preco then
-                        account.removeMoney(preco)
+                local societyAccount = QBCore.Functions.GetSocietyAccount(config.job)
+                if societyAccount then
+                    if societyAccount.money >= preco then
+                        societyAccount.money = societyAccount.money - preco
                         if config.societypercentage then
-                            if config.societypercentage >= 0 or config.societypercentage < 100 then
-                                local playerpercentage = 1.0-(config.societypercentage/100)
-                                local playerwin = playerpercentage*preco
+                            if config.societypercentage >= 0 and config.societypercentage < 100 then
+                                local playerpercentage = 1.0 - (config.societypercentage / 100)
+                                local playerwin = playerpercentage * preco
                                 if playerwin > 0 then
-                                    xPlayer.addAccountMoney("bank",playerwin)
-                                    --you won playerwin €
+                                    Player.Functions.AddMoney("bank", playerwin)
+                                    -- you won playerwin €
                                 end
                             end
                         end
                         pago = true
-						whyisitasync = true
+                        whyisitasync = true
                     else
-                        --The society don't have money
-						whyisitasync = true
+                        -- The society don't have money
+                        whyisitasync = true
                     end
-                    
-                end)
-            else
-                if xPlayer.getAccount("bank").money >= preco then
-                    pago = true
-                    xPlayer.removeAccountMoney("bank",preco)
-					whyisitasync = true
                 else
-                    --You don't have moneyyyyy
-					whyisitasync = true
+                    -- Society account not found
+                    whyisitasync = true
                 end
-                
+            else
+                if Player.PlayerData.money.bank >= preco then
+                    pago = true
+                    Player.Functions.RemoveMoney("bank", preco)
+                    whyisitasync = true
+                else
+                    -- You don't have moneyyyyy
+                    whyisitasync = true
+                end
             end
         else
-            --cheater
+            -- cheater
             whyisitasync = true
         end
     else
         whyisitasync = true
-        --cheater probably
+        -- cheater probably
     end
     while not whyisitasync do
         Wait(100)
-	end
+    end
     if pago then
         SaveVehicle(vehprops)
         if Config.WebHook and Config.WebHook ~= "" then
-            sendToDiscord('Mechanic Upgrade/Tuning Logs', "[Upgrade/Tuning Logs]\n\nTotal: ".. preco .."\n\nVehicle Plate Number: [".. vehprops.plate .."]\nMechanic that worked on the vehicle: " .. xPlayer.name, 11750815)
+            sendToDiscord('Mechanic Upgrade/Tuning Logs', "[Upgrade/Tuning Logs]\n\nTotal: " .. preco .. "\n\nVehicle Plate Number: [" .. vehprops.plate .. "]\nMechanic that worked on the vehicle: " .. Player.PlayerData.charinfo.firstname .. " " .. Player.PlayerData.charinfo.lastname, 11750815)
         end
     end
-    TriggerClientEvent("TunningSystem3hu:PayAfter",_source,pago)
+    TriggerClientEvent("TunningSystem3hu:PayAfter", _source, pago)
 end)
 
 if Config.MysqlAsync then
-	function SaveVehicle(vehprops)	
-		MySQL.Async.fetchAll('SELECT vehicle FROM owned_vehicles WHERE plate = @plate', {
-			['@plate'] = vehprops.plate
-		}, function(result)
-			if result[1] then
-				local vehicle = json.decode(result[1].vehicle)
+    function SaveVehicle(vehprops)
+        MySQL.Async.fetchAll('SELECT vehicle FROM owned_vehicles WHERE plate = @plate', {
+            ['@plate'] = vehprops.plate
+        }, function(result)
+            if result[1] then
+                local vehicle = json.decode(result[1].vehicle)
 
-				if vehprops.model == vehicle.model then
-					MySQL.Async.execute('UPDATE owned_vehicles SET vehicle = @vehicle WHERE plate = @plate', {
-						['@plate'] = vehprops.plate,
-						['@vehicle'] = json.encode(vehprops)
-					})
-					TriggerEvent("esx_lscustom:refreshOwnedVehicle",vehprops)
-				else
-					--cheateeeer
-				end
-			end
-		end)
-	end
+                if vehprops.model == vehicle.model then
+                    MySQL.Async.execute('UPDATE owned_vehicles SET vehicle = @vehicle WHERE plate = @plate', {
+                        ['@plate'] = vehprops.plate,
+                        ['@vehicle'] = json.encode(vehprops)
+                    })
+                    TriggerEvent("esx_lscustom:refreshOwnedVehicle", vehprops)
+                else
+                    -- cheateeeer
+                end
+            end
+        end)
+    end
 else
-	function SaveVehicle(vehprops)	
-		exports.ghmattimysql:execute('SELECT vehicle FROM owned_vehicles WHERE plate = @plate', {
-			['@plate'] = vehprops.plate
-		}, function(result)
-			if result[1] then
-				local vehicle = json.decode(result[1].vehicle)
+    function SaveVehicle(vehprops)
+        exports.ghmattimysql:execute('SELECT vehicle FROM owned_vehicles WHERE plate = @plate', {
+            ['@plate'] = vehprops.plate
+        }, function(result)
+            if result[1] then
+                local vehicle = json.decode(result[1].vehicle)
 
-				if vehprops.model == vehicle.model then
-					exports.ghmattimysql:execute('UPDATE owned_vehicles SET vehicle = @vehicle WHERE plate = @plate', {
-						['@plate'] = vehprops.plate,
-						['@vehicle'] = json.encode(vehprops)
-					})
-					TriggerEvent("esx_lscustom:refreshOwnedVehicle",vehprops)
-				else
-					--cheateeeer
-				end
-			end
-		end)
-	end
+                if vehprops.model == vehicle.model then
+                    exports.ghmattimysql:execute('UPDATE owned_vehicles SET vehicle = @vehicle WHERE plate = @plate', {
+                        ['@plate'] = vehprops.plate,
+                        ['@vehicle'] = json.encode(vehprops)
+                    })
+                    TriggerEvent("esx_lscustom:refreshOwnedVehicle", vehprops)
+                else
+                    -- cheateeeer
+                end
+            end
+        end)
+    end
 end
 
-function SendUsed(id,type)
-	Config.TunningLocations[id].used = type
-	TriggerClientEvent("TunningSystem3hu:Used",-1,id, type)
+function SendUsed(id, type)
+    Config.TunningLocations[id].used = type
+    TriggerClientEvent("TunningSystem3hu:Used", -1, id, type)
 end
